@@ -1,5 +1,12 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <linux/fs.h>
+#include "ext4.h"
 
 struct mbr_partition_entry {
     uint8_t status;
@@ -22,6 +29,7 @@ const char* get_partition_type(uint8_t type) {
         case 0x0C: return "FAT32 LBA";
         case 0x0E: return "FAT16 LBA";
         case 0x0F: return "Extended LBA";
+        case 0x83: return "Linux";
         default:   return "Unknown";
     }
 }
@@ -44,12 +52,13 @@ int main() {
     uint32_t sector_size = 512; // Tamaño de sector típico para discos MBR
 
     // Leer la entrada de la primera partición (0)
-    fseek(file, 0x1BE, SEEK_SET); // Posiciona en la tabla de particiones MBR
-    fread(&entry, sizeof(entry), 1, file); // Lee la entrada de la partición 0
+    fseek(file, 0x1BE, SEEK_SET);
+    fread(&entry, sizeof(entry), 1, file);
+
+    uint64_t partition_size_bytes = entry.sectors * sector_size;
+    double partition_size_mb = (double)partition_size_bytes / 1048576;
 
     printf("Tipo de la partición 0: %s\n", get_partition_type(entry.type));
-    printf("Tamaño de la partición 0: %u sectores\n", entry.sectors);
-    double partition_size_mb = (double)(entry.sectors * sector_size) / (1024 * 1024); // Convertir a MB
     printf("Tamaño de la partición 0: %.2f MB\n", partition_size_mb);
     printf("CHS de inicio de la partición 0: ");
     print_chs(entry.chs_start);
@@ -57,19 +66,35 @@ int main() {
     print_chs(entry.chs_end);
     printf("LBA de inicio de la partición 0: %u\n", entry.lba_start);
 
-    // Leer la entrada de la segunda partición (1)
-    fseek(file, 0x1BE + sizeof(struct mbr_partition_entry), SEEK_SET); // Posiciona en la entrada de la segunda partición
-    fread(&entry, sizeof(entry), 1, file); // Lee la entrada de la partición 1
+    // Verificar si la partición es de tipo ext4
+    if (entry.type != 0x83) {
+        printf("La partición 0 no es de tipo ext4\n");
+        fclose(file);
+        return 1;
+    }
 
-    printf("Tipo de la partición 1: %s\n", get_partition_type(entry.type));
-    printf("Tamaño de la partición 1: %u sectores\n", entry.sectors);
-    partition_size_mb = (double)(entry.sectors * sector_size) / (1024 * 1024); // Convertir a MB
-    printf("Tamaño de la partición 1: %.2f MB\n", partition_size_mb);
-    printf("CHS de inicio de la partición 1: ");
-    print_chs(entry.chs_start);
-    printf("CHS de fin de la partición 1: ");
-    print_chs(entry.chs_end);
-    printf("LBA de inicio de la partición 1: %u\n", entry.lba_start);
+    // Obtener superbloque de la partición 0
+    uint32_t lba_start = entry.lba_start;
+    int fd = fileno(file);
+    struct ext4_super_block sb;
+
+    // Buscar el superbloque en la partición 0
+    if (lseek(fd, (lba_start * sector_size) + 1024, SEEK_SET) < 0) {
+        perror("Error al buscar el superbloque en la partición 0");
+        fclose(file);
+        return 1;
+    }
+
+    if (read(fd, &sb, sizeof(sb)) != sizeof(sb)) {
+        perror("Error al leer el superbloque en la partición 0");
+        fclose(file);
+        return 1;
+    }
+    printf("\nComienza superbloque de la particion 0: \n");
+    printf("Cuenta inodes 0: %u\n", sb.s_inodes_count);
+    printf("Cuenta Blocks 0: %u\n", sb.s_blocks_count_lo);
+    printf("Block size de 0: %u\n", 1024 << sb.s_log_block_size);
+    printf("Magic Number 0: %x\n", sb.s_magic);
 
     fclose(file);
     return 0;
