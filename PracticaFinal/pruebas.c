@@ -56,6 +56,7 @@ int main() {
     print_chs(entry.chs_start);
     printf("CHS de fin de la partición 0: ");
     print_chs(entry.chs_end);
+    printf("LBA de inicio de la partición 0: %u\n", entry.lba_start);
 
     // Leer la entrada de la segunda partición (1)
     fseek(file, 0x1BE + sizeof(struct mbr_partition_entry), SEEK_SET); // Posiciona en la entrada de la segunda partición
@@ -70,6 +71,7 @@ int main() {
     print_chs(entry.chs_start);
     printf("CHS de fin de la partición 1: ");
     print_chs(entry.chs_end);
+    printf("LBA de inicio de la partición 1: %u\n", entry.lba_start);
 
     fclose(file);
     return 0;
