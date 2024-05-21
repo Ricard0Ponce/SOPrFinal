@@ -111,7 +111,7 @@ int main()
         fclose(file);
         return 1;
     }
-
+    
     // Obtener superbloque de la partición 0
     uint32_t lba_start0 = entry.lba_start;
     int fd0 = fileno(file);
@@ -135,10 +135,17 @@ int main()
     printf("\nComienza el super bloque de la particion 0: \n");
     printf("Número de inodos en la partición 0: %u\n", sb0.s_inodes_count);
     printf("Número de bloques en la partición 0: %u\n", sb0.s_blocks_count_lo);
-    printf("Tamaño de bloque en la partición 0: %u\n", 1024 << sb0.s_log_block_size);
-    printf("Firma mágica en la partición 0: %x\n", sb0.s_magic);
+    printf("Etiqueta: %s\n",sb0.s_volume_name);
     printf("Último punto de montaje en la partición 0: %.64s\n", sb0.s_last_mounted);
-
+    printf("First Inode: %u\n", sb0.s_first_ino);
+    printf("Tamaño de bloque en la partición 0: %u\n", 1024 << sb0.s_log_block_size);
+    // Calcular y mostrar el tamaño del inodo
+    printf("Tamaño del inodo en la partición 0: %u bytes\n", sb0.s_inode_size);
+        // Calcular y mostrar los bloques por grupo
+    printf("Bloques por grupo en la partición 0: %u\n", sb0.s_blocks_per_group);
+    printf("Inodes por grupo: %u\n",sb0.s_inodes_per_group);
+    printf("Firma mágica en la partición 0: %x\n", sb0.s_magic);
+    
     fclose(file);
     return 0;
 }
