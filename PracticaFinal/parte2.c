@@ -198,7 +198,7 @@ int main()
     */
 
     // Buscar el bloque de inode 
-    currentLocation = 0x149100;
+    currentLocation = secondInode;
 
     if (lseek(fd0, currentLocation, SEEK_SET) < 0)
     {
@@ -219,6 +219,9 @@ int main()
     // Impresión de los datos del bloque de extensiones
     printf("\n BLOQUE DE INODES \n");
     printf("Bloque del inode: %x\n", inode0.i_block[5]);
+
+    int dirBlock = getPosition(inode0.i_block[5]);
+    printf("El bloque del root esta en: %x\n", dirBlock);
 
     fclose(file);
     return 0;
