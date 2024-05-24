@@ -177,29 +177,12 @@ int main()
         return 1;
     }
 
-    // Leer el bloque de extensiones ?
-    struct ext4_extent extent0;
-    if (read(fd0, &extent0, sizeof(extent0)) != sizeof(extent0))
-    {
-        perror("Error al leer el bloque de extensiones");
-        fclose(file);
-        return 1;
-    }
-
     
     // Impresión de los datos del bloque de descriptores de grupo
     printf("\n DESCRIPTOR DE GRUPOS \n");
     printf("Directorios usados: %u\n", groupDescriptor0.bg_used_dirs_count_lo);
     printf("Bitmap block: %u\n", groupDescriptor0.bg_block_bitmap_lo);
     printf("Inode table: %u\n", groupDescriptor0.bg_inode_table_lo);
-
-    // Impresión de los datos del bloque de extensiones
-    printf("\n BLOQUE DE EXTENSIONES \n");
-    printf("No sé que es esto: %x\n", extent0.ee_start_lo);
-
-
-
-
 
     // Primer inode
     int firstInode = getPosition(groupDescriptor0.bg_inode_table_lo);
@@ -210,6 +193,32 @@ int main()
     int secondInode = firstInode + 0x100;
     printf("Segundo inode: %x\n", secondInode);
 
+    /*
+    *  bloque de inode 
+    */
+
+    // Buscar el bloque de inode 
+    currentLocation = 0x149100;
+
+    if (lseek(fd0, currentLocation, SEEK_SET) < 0)
+    {
+        perror("Error al buscar el bloque de inodes");
+        fclose(file);
+        return 1;
+    }
+
+    // Leer el bloque de inodes
+    struct ext4_inode inode0;
+    if (read(fd0, &inode0, sizeof(inode0)) != sizeof(inode0))
+    {
+        perror("Error al leer el bloque de inodes");
+        fclose(file);
+        return 1;
+    }
+
+    // Impresión de los datos del bloque de extensiones
+    printf("\n BLOQUE DE INODES \n");
+    printf("Bloque del inode: %x\n", inode0.i_block[5]);
 
     fclose(file);
     return 0;
