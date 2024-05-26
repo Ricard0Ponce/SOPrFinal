@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <linux/fs.h>
 #include <curses.h>
+#include "ext4.h"
 
 // Definición de la estructura de entrada de partición MBR
 struct mbr_partition_entry
@@ -49,6 +50,25 @@ const char *get_partition_type(uint8_t type)
   default:
     return "Unknown";
   }
+}
+
+struct ext4_super_block sb0;
+
+void imprimeSuperBlock()
+{
+  mvprintw(0, 0, "\nComienza el super bloque de la particion 0: \n\n");
+  mvprintw(3, 0, "Número de inodos en la partición 0: %u\n", sb0.s_inodes_count);
+  mvprintw(5, 0, "Número de bloques en la partición 0: %u\n", sb0.s_blocks_count_lo);
+  mvprintw(7, 0, "Etiqueta: %s\n", sb0.s_volume_name);
+  mvprintw(9, 0, "Ultimo punto de montaje en la partición 0: %.64s\n", sb0.s_last_mounted);
+  mvprintw(11, 0, "First Inode: %u\n", sb0.s_first_ino);
+  mvprintw(13, 0, "Tamaño de bloque en la partición 0: %u\n", 1024 << sb0.s_log_block_size);
+  // Calcular y mostrar el tamaño del inodo
+  mvprintw(15, 0, "Tamaño del inodo en la partición 0: %u bytes\n", sb0.s_inode_size);
+  // Calcular y mostrar los bloques por grupo
+  mvprintw(17, 0, "Bloques por grupo en la partición 0: %u\n", sb0.s_blocks_per_group);
+  mvprintw(19, 0, "Inodes por grupo: %u\n", sb0.s_inodes_per_group);
+  mvprintw(21, 0, "Firma mágica en la partición 0: %x\n", sb0.s_magic);
 }
 
 // Función para imprimir la información CHS
@@ -97,11 +117,55 @@ int main()
     perror("Error al abrir la imagen");
     return 1;
   }
+  ////////ESTO ES DEL SUPER BLOQUE /////
+  struct mbr_partition_entry entry; // Para suber bloque
+  uint32_t sector_size = 512;       // Tamaño de sector típico para discos MBR
+                                    // Leer la entrada de la primera partición (0)
+  fseek(file, 0x1BE, SEEK_SET);
+  fread(&entry, sizeof(entry), 1, file);
+  uint64_t partition_size_bytes = entry.sectors * sector_size;
+  double partition_size_mbi = (double)partition_size_bytes / 1048576;
+  // Obtener superbloque de la partición 0
+  uint32_t lba_start0 = entry.lba_start;
+  int fd0 = fileno(file);
 
+  // Buscar el superbloque en la partición 0
+  if (lseek(fd0, (lba_start0 * sector_size) + 1024, SEEK_SET) < 0)
+  {
+    perror("Error al buscar el superbloque en la partición 0");
+    fclose(file);
+    return 1;
+  }
+
+  if (read(fd0, &sb0, sizeof(sb0)) != sizeof(sb0))
+  {
+    perror("Error al leer el superbloque en la partición 0");
+    fclose(file);
+    return 1;
+  }
+
+  /// ESTO ES PARA EL INICIO /////////////
   struct mbr_partition_entry entries[4];
   char chs_start[4][20], chs_end[4][20], partition_type[4][20];
   double partition_size_mb[4];
-  uint32_t sector_size = 512;
+
+  // Leer la entrada de la primera partición (0)
+  fseek(file, 0x1BE, SEEK_SET);
+  fread(&entry, sizeof(entry), 1, file);
+
+  if (lseek(fd0, (lba_start0 * sector_size) + 1024, SEEK_SET) < 0)
+  {
+    perror("Error al buscar el superbloque en la partición 0");
+    fclose(file);
+    return 1;
+  }
+
+  if (read(fd0, &sb0, sizeof(sb0)) != sizeof(sb0))
+  {
+    perror("Error al leer el superbloque en la partición 0");
+    fclose(file);
+    return 1;
+  }
 
   for (int i = 0; i < 4; i++)
   {
@@ -129,37 +193,52 @@ int main()
 
   int i = 0;
   int c;
+  int bandera = 0;
+
   do
   {
-    for (int j = 0; j < 4; j++)
+    if (bandera == 0)
     {
-      if (j == i)
+      for (int j = 0; j < 4; j++)
       {
-        attron(A_REVERSE);
-      }
-      /*mvprintw(4 + j, 2, "%4d  %17s     %-20s  %17s  %12u  %8.2f", j, chs_start[j], partition_type[j], chs_end[j], entries[j].lba_start, partition_size_mb[j]);*/
-      mvprintw(4 + j, 2, "%4d  %15s      %-10s  %10s %12u  %8.2f", j, chs_start[j], partition_type[j], chs_end[j], entries[j].lba_start, partition_size_mb[j]);
+        if (j == i)
+        {
+          attron(A_REVERSE);
+        }
+        mvprintw(4 + j, 2, "%4d  %15s      %-10s  %10s %12u  %8.2f", j, chs_start[j], partition_type[j], chs_end[j], entries[j].lba_start, partition_size_mb[j]);
 
-      if (j == i)
-      {
-        attroff(A_REVERSE);
+        if (j == i)
+        {
+          attroff(A_REVERSE);
+        }
       }
+    }
+    else
+    {
+      clear();
+      endwin();
+      imprimeSuperBlock();
     }
     move(4 + i, 2);
     refresh();
     c = leeChar();
     switch (c)
     {
-    case 0x1B5B41: /* Flecha arriba */
+    case 0x1B5B41: // Flecha arriba
       i = (i > 0) ? i - 1 : 3;
       break;
-    case 0x1B5B42: /* Flecha abajo */
+    case 0x1B5B42: // Flecha abajo
       i = (i < 3) ? i + 1 : 0;
       break;
+    case 10: // Enter key
+    //Agregar un contador para que 
+      bandera = 1;
     default:
       break;
     }
   } while (c != 'q');
   endwin();
+
   return 0;
 }
+// 3026147*5
