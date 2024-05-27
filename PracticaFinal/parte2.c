@@ -154,7 +154,7 @@ int main()
 
     // TODO: dinamic block size
     // Bloque de descriptores
-    currentLocation = currentLocation + 1024;
+    currentLocation = currentLocation + 1024; // 1024 bytes del superbloque
 
     /*
     *  cada descriptor de grupo mide 0x40
@@ -177,20 +177,19 @@ int main()
         return 1;
     }
 
-    
     // Impresión de los datos del bloque de descriptores de grupo
     printf("\n DESCRIPTOR DE GRUPOS \n");
     printf("Directorios usados: %u\n", groupDescriptor0.bg_used_dirs_count_lo);
     printf("Bitmap block: %u\n", groupDescriptor0.bg_block_bitmap_lo);
     printf("Inode table: %u\n", groupDescriptor0.bg_inode_table_lo);
 
-    // Primer inode
-    int firstInode = getPosition(groupDescriptor0.bg_inode_table_lo);
+    // Posición del primer inode
+    int firstInode = getPosition(groupDescriptor0.bg_inode_table_lo); // obtener la posición del primer inode
     // imprime en hexadecimal
     printf("\nPrimer inode: %x\n", firstInode);
 
     // Segundo inode (el root)
-    int secondInode = firstInode + 0x100;
+    int secondInode = firstInode + 0x100; // por cada inode se ocupan 0x100
     printf("Segundo inode: %x\n", secondInode);
 
     /*
@@ -207,7 +206,7 @@ int main()
         return 1;
     }
 
-    // Leer el bloque de inodes
+    // Leer el bloque del inode del root
     struct ext4_inode inode0;
     if (read(fd0, &inode0, sizeof(inode0)) != sizeof(inode0))
     {
@@ -217,11 +216,47 @@ int main()
     }
 
     // Impresión de los datos del bloque de extensiones
-    printf("\n BLOQUE DE INODES \n");
-    printf("Bloque del inode: %x\n", inode0.i_block[5]);
+    printf("\n BLOQUE DE INODE DEL ROOT \n");
+    printf("Información del inode para el bloque root: %x\n", inode0.i_block[5]);
 
     int dirBlock = getPosition(inode0.i_block[5]);
     printf("El bloque del root esta en: %x\n", dirBlock);
+
+    /*
+    *  bloque del directorio root
+    */
+    // Posicionar la ubicación actual en el bloque del directorio root
+    currentLocation = dirBlock;
+
+    if (lseek(fd0, currentLocation, SEEK_SET) < 0)
+    {
+        perror("Error al buscar el bloque del directorio root");
+        fclose(file);
+        return 1;
+    }
+
+    // Leer el bloque del directorio root
+    struct ext4_dir_entry root[128];
+    if (read(fd0, &root, sizeof(root)) != sizeof(root))
+    {
+        perror("Error al leer el bloque del directorio root");
+        fclose(file);
+        return 1;
+    }
+
+    // Impresión de los datos del bloque root
+    printf("\n BLOQUE DEL DIRECTORIO ROOT \n");
+
+    // Imprimir las entradas del directorio
+    for (int i = 0; i < 128; i++) {
+        if (root[i].inode != 0) {  // Las entradas con inode 0 están vacías
+            printf("Inode: %u\n", root[i].inode);
+            printf("Rec_len: %u\n", root[i].rec_len);
+            printf("Name_len: %u\n", root[i].name_len);
+            printf("Name: %s\n", root[i].name);
+            printf("\n");
+        }
+    }
 
     fclose(file);
     return 0;
