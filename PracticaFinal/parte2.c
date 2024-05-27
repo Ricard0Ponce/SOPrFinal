@@ -19,6 +19,7 @@ struct mbr_partition_entry
 };
 
 int getPosition (int value);
+int readBlock(int fd, int currentLocation, void *structure, size_t size);
 
 const char *get_partition_type(uint8_t type)
 {
@@ -123,16 +124,7 @@ int main()
     int currentLocation = (lba_start0 * sector_size) + 1024;
 
     // Buscar el superbloque en la partición 0
-    if (lseek(fd0, currentLocation, SEEK_SET) < 0)
-    {
-        perror("Error al buscar el superbloque en la partición 0");
-        fclose(file);
-        return 1;
-    }
-
-    if (read(fd0, &sb0, sizeof(sb0)) != sizeof(sb0))
-    {
-        perror("Error al leer el superbloque en la partición 0");
+    if (readBlock(fd0, currentLocation, &sb0, sizeof(sb0)) != 0) {
         fclose(file);
         return 1;
     }
@@ -160,22 +152,12 @@ int main()
     *  cada descriptor de grupo mide 0x40
     */
 
-    // Buscar el bloque de descriptores de grupo
-    if (lseek(fd0, currentLocation, SEEK_SET) < 0)
-    {
-        perror("Error al buscar el bloque de descriptores de grupo");
-        fclose(file);
-        return 1;
-    }
-
     // Leer el bloque de descriptores de grupo
     struct ext4_group_desc groupDescriptor0;
-    if (read(fd0, &groupDescriptor0, sizeof(groupDescriptor0)) != sizeof(groupDescriptor0))
-    {
-        perror("Error al leer el bloque de descriptores de grupo");
+    if (readBlock(fd0, currentLocation, &groupDescriptor0, sizeof(groupDescriptor0)) != 0) {
         fclose(file);
         return 1;
-    }
+    } 
 
     // Impresión de los datos del bloque de descriptores de grupo
     printf("\n DESCRIPTOR DE GRUPOS \n");
@@ -199,21 +181,15 @@ int main()
     // Buscar el bloque de inode 
     currentLocation = secondInode;
 
-    if (lseek(fd0, currentLocation, SEEK_SET) < 0)
-    {
-        perror("Error al buscar el bloque de inodes");
-        fclose(file);
-        return 1;
-    }
+    
 
     // Leer el bloque del inode del root
     struct ext4_inode inode0;
-    if (read(fd0, &inode0, sizeof(inode0)) != sizeof(inode0))
-    {
-        perror("Error al leer el bloque de inodes");
+    if (readBlock(fd0, currentLocation, &inode0, sizeof(inode0)) != 0) {
         fclose(file);
         return 1;
     }
+    
 
     // Impresión de los datos del bloque de extensiones
     printf("\n BLOQUE DE INODE DEL ROOT \n");
@@ -228,18 +204,11 @@ int main()
     // Posicionar la ubicación actual en el bloque del directorio root
     currentLocation = dirBlock;
 
-    if (lseek(fd0, currentLocation, SEEK_SET) < 0)
-    {
-        perror("Error al buscar el bloque del directorio root");
-        fclose(file);
-        return 1;
-    }
+
+    struct ext4_dir_entry root[128];
 
     // Leer el bloque del directorio root
-    struct ext4_dir_entry root[128];
-    if (read(fd0, &root, sizeof(root)) != sizeof(root))
-    {
-        perror("Error al leer el bloque del directorio root");
+    if (readBlock(fd0, currentLocation, &root, sizeof(root)) != 0) {
         fclose(file);
         return 1;
     }
@@ -265,4 +234,21 @@ int main()
 int getPosition(int value)
 {
     return value * 0x400 + 0x100000;
+}
+
+int readBlock(int fd, int currentLocation, void *structure, size_t size)
+{
+    if (lseek(fd, currentLocation, SEEK_SET) < 0)
+    {
+        perror("Error al buscar el bloque");
+        return 1;
+    }
+
+    if (read(fd, structure, size) != size)
+    {
+        perror("Error al leer el bloque");
+        return 1;
+    }
+
+    return 0;
 }
