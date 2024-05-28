@@ -18,6 +18,7 @@ struct mbr_partition_entry {
 };
 
 int getPosition(int value);
+int getDirInode(int inode);
 int readBlock(int fd, int currentLocation, void *structure, size_t size);
 
 const char *get_partition_type(uint8_t type) {
@@ -219,7 +220,7 @@ int main() {
     struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtr;
 
     // TODO: remove this
-    if(entry->inode == 32642) {
+    if (entry->inode == 32642) {
       segundoDirectorioAux = *entry;
     }
 
@@ -230,36 +231,26 @@ int main() {
   }
 
   /*
-  * Inodes de los directorios volviendo a los descriptores de grupos
-  */
- printf("Segundo directorio inode: %u\n", segundoDirectorioAux.inode);
+   * Inodes de los directorios volviendo a los descriptores de grupos
+   */
+  printf("Segundo directorio inode: %u\n", segundoDirectorioAux.inode);
 
- // TODO: division con residuo
- // Calcular el descriptor de grupo para el segundo directorio
- int calculoDescriptorDeGrupo = segundoDirectorioAux.inode / 2040; // 2040 = 0x7F8, tamaño de un grupo
- // Se multiplica por 0x40 porque cada descriptor de grupo mide 0x40
- calculoDescriptorDeGrupo = calculoDescriptorDeGrupo * 0x40;
- // Se suma 0x100800 porque es la posición donde comienzan los descriptores de grupo
- calculoDescriptorDeGrupo = calculoDescriptorDeGrupo + 0x100800;
- printf("Calculo desconocido: %x\n", calculoDescriptorDeGrupo);
+  // TODO: division con residuo
+  // Calcular el descriptor de grupo para el segundo directorio
+  int calculoDescriptorDeGrupo = getDirInode(segundoDirectorioAux.inode);
+  printf("Calculo desconocido: %x\n", calculoDescriptorDeGrupo);
 
- currentLocation = calculoDescriptorDeGrupo;
+  currentLocation = calculoDescriptorDeGrupo;
 
   // TODO: reusar la variable anterior
   // Leer el bloque de descriptores de grupo
   struct ext4_group_desc groupDescriptor1;
 
-  if (readBlock(fd0, currentLocation, &groupDescriptor1, sizeof(groupDescriptor1)) != 0) {
+  if (readBlock(fd0, currentLocation, &groupDescriptor1,
+                sizeof(groupDescriptor1)) != 0) {
     fclose(file);
     return 1;
   }
-
-  // TODO: remove this
-  // Impresión de los datos del bloque de descriptores de grupo
-  printf("\n DESCRIPTOR DE GRUPOS \n");
-  printf("Directorios usados: %x\n", groupDescriptor1.bg_used_dirs_count_lo);
-  printf("Bitmap block: %x\n", groupDescriptor1.bg_block_bitmap_lo);
-  printf("Inode table: %x\n", groupDescriptor1.bg_inode_table_lo);
 
   // Obtener la tabla de inodes
   currentLocation = getPosition(groupDescriptor1.bg_inode_table_lo);
@@ -272,13 +263,11 @@ int main() {
     return 1;
   }
 
-  printf("\n BLOQUE DE INODE DEL ROOT \n");
-  printf("Información del inode para el bloque: %x\n", inode1.i_block[5]); // TODO: Porqué es 5?
+  printf("\n BLOQUE DE INODE DEL SEGUNDO DIRECTORIO \n");
 
   dirBlock = getPosition(inode1.i_block[5]);
   printf("El bloque del directorio esta en: %x\n", dirBlock);
 
-  
   /*
    *  bloque del segundo directorio
    */
@@ -293,7 +282,7 @@ int main() {
     return 1;
   }
 
-  // Impresión de los datos del bloque root
+  // Impresión de los datos del bloque
   printf("\n BLOQUE DEL SEGUNDO DIRECTORIO\n");
 
   // TODO: what's does mean 'blockPtr'?
@@ -307,12 +296,28 @@ int main() {
     blockPtrD += entry->rec_len;
   }
 
-
   fclose(file);
   return 0;
 }
 
+///////////////////////////////////////////////////////////
+// Funtions
+///////////////////////////////////////////////////////////
+
 int getPosition(int value) { return value * 0x400 + 0x100000; }
+
+// TODO: division con residuo
+int getDirInode(int inode) {
+  // Calcular el descriptor de grupo para el segundo directorio
+  int groupDescriptor = inode / 2040; // 2040 = 0x7F8, tamaño de un grupo
+  // Se multiplica por 0x40 porque cada descriptor de grupo mide 0x40
+  groupDescriptor *= 0x40;
+  // Se suma 0x100800 porque es la posición donde comienzan los descriptores de
+  // grupo
+  groupDescriptor += 0x100800;
+
+  return groupDescriptor;
+}
 
 int readBlock(int fd, int currentLocation, void *structure, size_t size) {
   if (lseek(fd, currentLocation, SEEK_SET) < 0) {
