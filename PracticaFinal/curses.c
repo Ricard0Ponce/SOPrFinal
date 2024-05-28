@@ -8,6 +8,7 @@
 #include <linux/fs.h>
 #include <curses.h>
 #include "ext4.h"
+#include <string.h>
 
 // Definición de la estructura de entrada de partición MBR
 struct mbr_partition_entry
@@ -54,6 +55,12 @@ const char *get_partition_type(uint8_t type)
 
 struct ext4_super_block sb0;
 struct ext4_group_desc groupDescriptor0;
+struct ext4_inode inode0;
+struct ext4_dir_entry_2 root;
+struct ext4_dir_entry_2 segundoDirectorioAux;
+
+int aux = 1; // Iniciamos la bandera como 1.
+int aux2 = 0;
 
 int readBlock(int fd, int currentLocation, void *structure, size_t size)
 {
@@ -72,6 +79,21 @@ int readBlock(int fd, int currentLocation, void *structure, size_t size)
   return 0; // Agregar este retorno al final
 }
 
+int getPosition(int value) { return value * 0x400 + 0x100000; }
+
+// TODO: division con residuo
+int getDirInode(int inode)
+{
+  // Calcular el descriptor de grupo para el segundo directorio
+  int groupDescriptor = inode / 2040; // 2040 = 0x7F8, tamaño de un grupo
+  // Se multiplica por 0x40 porque cada descriptor de grupo mide 0x40
+  groupDescriptor *= 0x40;
+  // Se suma 0x100800 porque es la posición donde comienzan los descriptores de
+  // grupo
+  groupDescriptor += 0x100800;
+
+  return groupDescriptor;
+}
 
 void imprimeDescriptorDeGrupo()
 {
@@ -80,8 +102,8 @@ void imprimeDescriptorDeGrupo()
   mvprintw(3, 0, "Directorios usados: %u\n", groupDescriptor0.bg_used_dirs_count_lo);
   mvprintw(5, 0, "Bitmap block: %u\n", groupDescriptor0.bg_block_bitmap_lo);
   mvprintw(7, 0, "Inode table: %u\n", groupDescriptor0.bg_inode_table_lo);
+  aux2 = aux2 + 1;
 }
-int aux = 1; // Iniciamos la bandera como 1.
 
 void imprimeSuperBlock()
 {
@@ -100,6 +122,37 @@ void imprimeSuperBlock()
   mvprintw(21, 0, "Firma mágica en la partición 0: %x\n", sb0.s_magic);
   aux = aux + 1; // Aca indicamos que ya puede pasar a la siguiente parte pues el auxiliar ya es 2
 }
+
+void imprimeDirectorio()
+{
+  mvprintw(0, 0, "\n BLOQUE DEL DIRECTORIO ROOT \n");
+
+  char *blockPtr = (char *)&root;
+  int fila = 5; // Comenzar en la fila 5 para los nombres de los archivos
+
+  while (blockPtr < (char *)&root + sizeof(root)) {
+    struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtr;
+
+    // Validar que la entrada del directorio sea válida
+    if (entry->inode != 0) {
+      char filename[255]; // Buffer para el nombre del archivo
+      // Copiar el nombre del archivo desde la entrada del directorio al buffer
+      memcpy(filename, entry->name, entry->name_len);
+      filename[entry->name_len] = '\0'; // Agregar el terminador nulo al final del nombre del archivo
+
+      mvprintw(fila, 0, "Nombre: %s -> %u\n", filename, entry->inode);
+      fila += 2; // Incrementar la fila en 2 para el próximo elemento
+    }
+
+    // Mover al siguiente bloque de directorio
+    blockPtr += entry->rec_len;
+    if (entry->rec_len == 0) {
+        break; // Salir del bucle si el tamaño del registro es 0 para evitar un bucle infinito
+    }
+  }
+}
+
+
 
 // Función para imprimir la información CHS
 void print_chs(uint8_t chs[3], char *buffer)
@@ -224,7 +277,6 @@ int main()
   int i = 0;
   int c;
   int bandera = 0;
- 
 
   do
   {
@@ -247,12 +299,11 @@ int main()
     else if (bandera == 1 && aux != 3)
     {
       clear();
-      // endwin();
       imprimeSuperBlock();
     }
     if (aux == 3)
     {
-       int currentLocation = (lba_start0 * sector_size) + 1024;
+      int currentLocation = (lba_start0 * sector_size) + 1024;
       int fd0 = open("imagen.img", O_RDONLY);
       if (fd0 < 0)
       {
@@ -265,14 +316,44 @@ int main()
       if (readBlock(fd0, currentLocation, &groupDescriptor0,
                     sizeof(groupDescriptor0)) != 0)
       {
-        fclose(file);
+        // fclose(file);
+        return 1;
+      }
+      int dirBlock = getPosition(inode0.i_block[5]);
+      currentLocation = dirBlock;
+      clear();
+      imprimeDescriptorDeGrupo();
+    }
+
+    if (aux2 == 2)
+    {
+      clear();
+      // Posición del primer inode
+      int firstInode = getPosition(
+          groupDescriptor0
+              .bg_inode_table_lo); // obtener la posición del primer inode
+      // imprime en hexadecimal
+      // printf("\nPrimer inode: %x\n", firstInode);
+      // Segundo inode (el root)
+      int secondInode = firstInode + 0x100; // por cada inode se ocupan 0x100
+      // printf("Segundo inode: %x\n", secondInode);
+      int currentLocation;
+      currentLocation = secondInode;
+      if (readBlock(fd0, currentLocation, &inode0, sizeof(inode0)) != 0)
+      {
+        // fclose(file);
+        return 1;
+      }
+      // Leer el bloque del directorio root
+      if (readBlock(fd0, currentLocation, &root, sizeof(root)) != 0)
+      {
+        // fclose(file);
         return 1;
       }
 
-      clear();
-      // endwin();
-      imprimeDescriptorDeGrupo();
+      imprimeDirectorio(); // Invocamos la funcion que imprime al directorio. 
     }
+
     move(4 + i, 2);
     refresh();
     c = leeChar();
@@ -285,15 +366,11 @@ int main()
       i = (i < 3) ? i + 1 : 0;
       break;
     case 10: // Enter key
-             // Agregar un contador para que
       bandera = 1;
     default:
       break;
     }
   } while (c != 'q');
- // endwin();
-  endwin();     // Mueve la liberación de memoria aquí
-  //fclose(file); // También cierra el archivo aquí
+  endwin(); // Mueve la liberación de memoria aquí
   return 0;
 }
-// 3026147*5
