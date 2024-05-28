@@ -53,6 +53,35 @@ const char *get_partition_type(uint8_t type)
 }
 
 struct ext4_super_block sb0;
+struct ext4_group_desc groupDescriptor0;
+
+int readBlock(int fd, int currentLocation, void *structure, size_t size)
+{
+  if (lseek(fd, currentLocation, SEEK_SET) < 0)
+  {
+    perror("Error al buscar el bloque");
+    return 1;
+  }
+
+  if (read(fd, structure, size) != size)
+  {
+    perror("Error al leer el bloque");
+    return 1;
+  }
+
+  return 0; // Agregar este retorno al final
+}
+
+
+void imprimeDescriptorDeGrupo()
+{
+  // Impresión de los datos del bloque de descriptores de grupo
+  mvprintw(0, 0, "\n DESCRIPTOR DE GRUPOS \n");
+  mvprintw(3, 0, "Directorios usados: %u\n", groupDescriptor0.bg_used_dirs_count_lo);
+  mvprintw(5, 0, "Bitmap block: %u\n", groupDescriptor0.bg_block_bitmap_lo);
+  mvprintw(7, 0, "Inode table: %u\n", groupDescriptor0.bg_inode_table_lo);
+}
+int aux = 1; // Iniciamos la bandera como 1.
 
 void imprimeSuperBlock()
 {
@@ -69,6 +98,7 @@ void imprimeSuperBlock()
   mvprintw(17, 0, "Bloques por grupo en la partición 0: %u\n", sb0.s_blocks_per_group);
   mvprintw(19, 0, "Inodes por grupo: %u\n", sb0.s_inodes_per_group);
   mvprintw(21, 0, "Firma mágica en la partición 0: %x\n", sb0.s_magic);
+  aux = aux + 1; // Aca indicamos que ya puede pasar a la siguiente parte pues el auxiliar ya es 2
 }
 
 // Función para imprimir la información CHS
@@ -194,6 +224,7 @@ int main()
   int i = 0;
   int c;
   int bandera = 0;
+ 
 
   do
   {
@@ -213,11 +244,34 @@ int main()
         }
       }
     }
-    else
+    else if (bandera == 1 && aux != 3)
     {
       clear();
-      endwin();
+      // endwin();
       imprimeSuperBlock();
+    }
+    if (aux == 3)
+    {
+       int currentLocation = (lba_start0 * sector_size) + 1024;
+      int fd0 = open("imagen.img", O_RDONLY);
+      if (fd0 < 0)
+      {
+        perror("Error al abrir el archivo");
+        return 1;
+      }
+
+      currentLocation = currentLocation + 1024;
+      // Leer el bloque de descriptores de grupo
+      if (readBlock(fd0, currentLocation, &groupDescriptor0,
+                    sizeof(groupDescriptor0)) != 0)
+      {
+        fclose(file);
+        return 1;
+      }
+
+      clear();
+      // endwin();
+      imprimeDescriptorDeGrupo();
     }
     move(4 + i, 2);
     refresh();
@@ -231,14 +285,15 @@ int main()
       i = (i < 3) ? i + 1 : 0;
       break;
     case 10: // Enter key
-    //Agregar un contador para que 
+             // Agregar un contador para que
       bandera = 1;
     default:
       break;
     }
   } while (c != 'q');
-  endwin();
-
+ // endwin();
+  endwin();     // Mueve la liberación de memoria aquí
+  //fclose(file); // También cierra el archivo aquí
   return 0;
 }
 // 3026147*5
