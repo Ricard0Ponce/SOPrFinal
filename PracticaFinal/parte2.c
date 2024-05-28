@@ -208,6 +208,9 @@ int main() {
     return 1;
   }
 
+  // TODO: fix this
+  struct ext4_dir_entry_2 segundoDirectorioAux;
+
   // Impresión de los datos del bloque root
   printf("\n BLOQUE DEL DIRECTORIO ROOT \n");
 
@@ -215,11 +218,95 @@ int main() {
   while (blockPtr < (char *)&root + sizeof(root)) {
     struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtr;
 
+    // TODO: remove this
+    if(entry->inode == 32642) {
+      segundoDirectorioAux = *entry;
+    }
+
     printf("Nombre: %s -> %u\n", entry->name, entry->inode);
 
     // Move to the next directory entry
     blockPtr += entry->rec_len;
   }
+
+  /*
+  * Inodes de los directorios volviendo a los descriptores de grupos
+  */
+ printf("Segundo directorio inode: %u\n", segundoDirectorioAux.inode);
+
+ // TODO: division con residuo
+ // Calcular el descriptor de grupo para el segundo directorio
+ int calculoDescriptorDeGrupo = segundoDirectorioAux.inode / 2040; // 2040 = 0x7F8, tamaño de un grupo
+ // Se multiplica por 0x40 porque cada descriptor de grupo mide 0x40
+ calculoDescriptorDeGrupo = calculoDescriptorDeGrupo * 0x40;
+ // Se suma 0x100800 porque es la posición donde comienzan los descriptores de grupo
+ calculoDescriptorDeGrupo = calculoDescriptorDeGrupo + 0x100800;
+ printf("Calculo desconocido: %x\n", calculoDescriptorDeGrupo);
+
+ currentLocation = calculoDescriptorDeGrupo;
+
+  // TODO: reusar la variable anterior
+  // Leer el bloque de descriptores de grupo
+  struct ext4_group_desc groupDescriptor1;
+
+  if (readBlock(fd0, currentLocation, &groupDescriptor1, sizeof(groupDescriptor1)) != 0) {
+    fclose(file);
+    return 1;
+  }
+
+  // TODO: remove this
+  // Impresión de los datos del bloque de descriptores de grupo
+  printf("\n DESCRIPTOR DE GRUPOS \n");
+  printf("Directorios usados: %x\n", groupDescriptor1.bg_used_dirs_count_lo);
+  printf("Bitmap block: %x\n", groupDescriptor1.bg_block_bitmap_lo);
+  printf("Inode table: %x\n", groupDescriptor1.bg_inode_table_lo);
+
+  // Obtener la tabla de inodes
+  currentLocation = getPosition(groupDescriptor1.bg_inode_table_lo);
+  printf("Tabla de inodes: %x\n", currentLocation);
+
+  // Leer el bloque de inode del segundo directorio
+  struct ext4_inode inode1;
+  if (readBlock(fd0, currentLocation, &inode1, sizeof(inode1)) != 0) {
+    fclose(file);
+    return 1;
+  }
+
+  printf("\n BLOQUE DE INODE DEL ROOT \n");
+  printf("Información del inode para el bloque: %x\n", inode1.i_block[5]); // TODO: Porqué es 5?
+
+  dirBlock = getPosition(inode1.i_block[5]);
+  printf("El bloque del directorio esta en: %x\n", dirBlock);
+
+  
+  /*
+   *  bloque del segundo directorio
+   */
+  // Posicionar la ubicación actual en el bloque del segundo directorio
+  currentLocation = dirBlock;
+
+  struct ext4_dir_entry_2 directorio;
+
+  // Leer el bloque del segundo directorio
+  if (readBlock(fd0, currentLocation, &directorio, sizeof(directorio)) != 0) {
+    fclose(file);
+    return 1;
+  }
+
+  // Impresión de los datos del bloque root
+  printf("\n BLOQUE DEL SEGUNDO DIRECTORIO\n");
+
+  // TODO: what's does mean 'blockPtr'?
+  char *blockPtrD = (char *)&directorio;
+  while (blockPtrD < (char *)&directorio + sizeof(directorio)) {
+    struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtrD;
+
+    printf("Nombre: %s -> %u\n", entry->name, entry->inode);
+
+    // Move to the next directory entry
+    blockPtrD += entry->rec_len;
+  }
+
 
   fclose(file);
   return 0;
