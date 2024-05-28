@@ -21,6 +21,8 @@ int getPosition(int value);
 int getDirInode(int inode);
 int readBlock(int fd, int currentLocation, void *structure, size_t size);
 
+int residuo = 0;
+
 const char *get_partition_type(uint8_t type) {
   switch (type) {
   case 0x00:
@@ -220,7 +222,7 @@ int main() {
     struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtr;
 
     // TODO: remove this
-    if (entry->inode == 32642) {
+    if (entry->inode == 32641) {
       segundoDirectorioAux = *entry;
     }
 
@@ -254,6 +256,7 @@ int main() {
 
   // Obtener la tabla de inodes
   currentLocation = getPosition(groupDescriptor1.bg_inode_table_lo);
+  currentLocation += ((residuo - 1) * 0x100);
   printf("Tabla de inodes: %x\n", currentLocation);
 
   // Leer el bloque de inode del segundo directorio
@@ -310,11 +313,13 @@ int getPosition(int value) { return value * 0x400 + 0x100000; }
 int getDirInode(int inode) {
   // Calcular el descriptor de grupo para el segundo directorio
   int groupDescriptor = inode / 2040; // 2040 = 0x7F8, tamaño de un grupo
+  residuo = inode % 2040;
   // Se multiplica por 0x40 porque cada descriptor de grupo mide 0x40
   groupDescriptor *= 0x40;
   // Se suma 0x100800 porque es la posición donde comienzan los descriptores de
   // grupo
   groupDescriptor += 0x100800;
+  // groupDescriptor += (residuo - 1) * 0x100;
 
   return groupDescriptor;
 }
