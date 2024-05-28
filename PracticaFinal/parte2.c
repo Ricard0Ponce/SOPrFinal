@@ -215,9 +215,7 @@ int main() {
   while (blockPtr < (char *)&root + sizeof(root)) {
     struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtr;
 
-    // TODO: is this print necessary?
-    // printf("Inode: %d\n", entry->inode);
-    printf("Nombre: %s\n", entry->name);
+    printf("Nombre: %s -> %u\n", entry->name, entry->inode);
 
     // Move to the next directory entry
     blockPtr += entry->rec_len;
