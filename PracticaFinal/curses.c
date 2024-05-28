@@ -10,6 +10,11 @@
 #include "ext4.h"
 #include <string.h>
 
+// Se declaran variables globales:
+int aux = 1; // Iniciamos la bandera como 1.
+int aux2 = 0;
+bool activado = false; 
+
 // Definición de la estructura de entrada de partición MBR
 struct mbr_partition_entry
 {
@@ -20,10 +25,19 @@ struct mbr_partition_entry
   uint32_t lba_start;
   uint32_t sectors;
 };
+// Definimos las estructuras que se usaran:
+struct ext4_super_block sb0;
+struct ext4_group_desc groupDescriptor0;
+struct ext4_inode inode0;
+struct ext4_dir_entry_2 root;
+struct ext4_dir_entry_2 segundoDirectorioAux;
 
-// Función para obtener el tipo de partición como una cadena
+// Se declaran las funciones:
+
+// Función para obtener el tipo de partición como una cadena.
 const char *get_partition_type(uint8_t type)
 {
+  // Se definen todos los tipos con su respectivo valor.
   switch (type)
   {
   case 0x00:
@@ -53,15 +67,7 @@ const char *get_partition_type(uint8_t type)
   }
 }
 
-struct ext4_super_block sb0;
-struct ext4_group_desc groupDescriptor0;
-struct ext4_inode inode0;
-struct ext4_dir_entry_2 root;
-struct ext4_dir_entry_2 segundoDirectorioAux;
-
-int aux = 1; // Iniciamos la bandera como 1.
-int aux2 = 0;
-
+// Funcion que permite la lectura de un bloque
 int readBlock(int fd, int currentLocation, void *structure, size_t size)
 {
   if (lseek(fd, currentLocation, SEEK_SET) < 0)
@@ -79,7 +85,10 @@ int readBlock(int fd, int currentLocation, void *structure, size_t size)
   return 0; // Agregar este retorno al final
 }
 
-int getPosition(int value) { return value * 0x400 + 0x100000; }
+int getPosition(int value)
+{
+  return value * 0x400 + 0x100000;
+}
 
 // TODO: division con residuo
 int getDirInode(int inode)
@@ -95,16 +104,7 @@ int getDirInode(int inode)
   return groupDescriptor;
 }
 
-void imprimeDescriptorDeGrupo()
-{
-  // Impresión de los datos del bloque de descriptores de grupo
-  mvprintw(0, 0, "\n DESCRIPTOR DE GRUPOS \n");
-  mvprintw(3, 0, "Directorios usados: %u\n", groupDescriptor0.bg_used_dirs_count_lo);
-  mvprintw(5, 0, "Bitmap block: %u\n", groupDescriptor0.bg_block_bitmap_lo);
-  mvprintw(7, 0, "Inode table: %u\n", groupDescriptor0.bg_inode_table_lo);
-  aux2 = aux2 + 1;
-}
-
+// Imprimimos el super bloque.
 void imprimeSuperBlock()
 {
   mvprintw(0, 0, "\nComienza el super bloque de la particion 0: \n\n");
@@ -121,8 +121,22 @@ void imprimeSuperBlock()
   mvprintw(19, 0, "Inodes por grupo: %u\n", sb0.s_inodes_per_group);
   mvprintw(21, 0, "Firma mágica en la partición 0: %x\n", sb0.s_magic);
   aux = aux + 1; // Aca indicamos que ya puede pasar a la siguiente parte pues el auxiliar ya es 2
+  activado = false; 
 }
 
+// Imprimimos el descriptor de grupo.
+void imprimeDescriptorDeGrupo()
+{
+  // Impresión de los datos del bloque de descriptores de grupo
+  mvprintw(0, 0, "\n DESCRIPTOR DE GRUPOS \n");
+  mvprintw(3, 0, "Directorios usados: %u\n", groupDescriptor0.bg_used_dirs_count_lo);
+  mvprintw(5, 0, "Bitmap block: %u\n", groupDescriptor0.bg_block_bitmap_lo);
+  mvprintw(7, 0, "Inode table: %u\n", groupDescriptor0.bg_inode_table_lo);
+  aux2 = aux2 + 1;
+  activado = false; 
+}
+
+// Imprimimos el directorio raiz.
 void imprimeDirectorio()
 {
   mvprintw(0, 0, "\n BLOQUE DEL DIRECTORIO ROOT \n");
@@ -130,11 +144,13 @@ void imprimeDirectorio()
   char *blockPtr = (char *)&root;
   int fila = 5; // Comenzar en la fila 5 para los nombres de los archivos
 
-  while (blockPtr < (char *)&root + sizeof(root)) {
+  while (blockPtr < (char *)&root + sizeof(root))
+  {
     struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtr;
 
     // Validar que la entrada del directorio sea válida
-    if (entry->inode != 0) {
+    if (entry->inode != 0)
+    {
       char filename[255]; // Buffer para el nombre del archivo
       // Copiar el nombre del archivo desde la entrada del directorio al buffer
       memcpy(filename, entry->name, entry->name_len);
@@ -146,13 +162,13 @@ void imprimeDirectorio()
 
     // Mover al siguiente bloque de directorio
     blockPtr += entry->rec_len;
-    if (entry->rec_len == 0) {
-        break; // Salir del bucle si el tamaño del registro es 0 para evitar un bucle infinito
+    if (entry->rec_len == 0)
+    {
+      break; // Salir del bucle si el tamaño del registro es 0 para evitar un bucle infinito
     }
   }
+  activado = false; 
 }
-
-
 
 // Función para imprimir la información CHS
 void print_chs(uint8_t chs[3], char *buffer)
@@ -296,10 +312,10 @@ int main()
         }
       }
     }
-    else if (bandera == 1 && aux != 3)
+    else if (bandera == 1 && aux != 3 && activado == true)
     {
       clear();
-      imprimeSuperBlock();
+      imprimeSuperBlock(); // Actualizamos la vista al super bloque
     }
     if (aux == 3)
     {
@@ -316,13 +332,13 @@ int main()
       if (readBlock(fd0, currentLocation, &groupDescriptor0,
                     sizeof(groupDescriptor0)) != 0)
       {
-        // fclose(file);
         return 1;
       }
+
       int dirBlock = getPosition(inode0.i_block[5]);
       currentLocation = dirBlock;
       clear();
-      imprimeDescriptorDeGrupo();
+      imprimeDescriptorDeGrupo(); // Actualizamos la vista al descriptor de grupo
     }
 
     if (aux2 == 2)
@@ -332,31 +348,35 @@ int main()
       int firstInode = getPosition(
           groupDescriptor0
               .bg_inode_table_lo); // obtener la posición del primer inode
-      // imprime en hexadecimal
-      // printf("\nPrimer inode: %x\n", firstInode);
       // Segundo inode (el root)
       int secondInode = firstInode + 0x100; // por cada inode se ocupan 0x100
-      // printf("Segundo inode: %x\n", secondInode);
       int currentLocation;
-      currentLocation = secondInode;
+      currentLocation = secondInode; // Actualiza la localizacion.
       if (readBlock(fd0, currentLocation, &inode0, sizeof(inode0)) != 0)
       {
-        // fclose(file);
         return 1;
       }
+
+      currentLocation = getPosition(inode0.i_block[5]);
+
       // Leer el bloque del directorio root
       if (readBlock(fd0, currentLocation, &root, sizeof(root)) != 0)
       {
-        // fclose(file);
         return 1;
       }
-
-      imprimeDirectorio(); // Invocamos la funcion que imprime al directorio. 
+      bandera = 2;
+      aux = aux + 1;
+      imprimeDirectorio(); // Invocamos la funcion que imprime al directorio.
     }
 
-    move(4 + i, 2);
-    refresh();
+    if (bandera == 0)
+    {
+      move(4 + i, 2);
+      refresh();
+    }
+
     c = leeChar();
+
     switch (c)
     {
     case 0x1B5B41: // Flecha arriba
@@ -367,6 +387,7 @@ int main()
       break;
     case 10: // Enter key
       bandera = 1;
+      activado = true;
     default:
       break;
     }
