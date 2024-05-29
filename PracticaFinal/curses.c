@@ -475,8 +475,6 @@ int main()
       mvhline(moverC, 0, ' ', largoLinea);  // Dibujar una línea horizontal de espacios
       mvprintw(moverC, 0, "Nombre: %s -> %u", inode_names2[ind2].name, inode_names2[ind2].inode);
       attroff(COLOR_PAIR(1) | A_REVERSE); 
-      mvprintw(15, 0, "I: %d ", ind2);
-      mvprintw(16, 0, "Move: %d ", moverC);
     }
 
     if (bandera == 0)
