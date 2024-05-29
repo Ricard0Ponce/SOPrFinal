@@ -14,6 +14,7 @@
 int aux = 1;             // Bandera de control inicializada en 1
 int aux2 = 0;            // Segunda bandera de control inicializada en 0
 bool activado = false;   // Estado booleano inicializado en falso
+int residuo = 0;         // Variable para el residuo de la división
 
 // Definición de la estructura de entrada de partición MBR
 struct mbr_partition_entry {
@@ -78,6 +79,8 @@ int getPosition(int value) {
 int getDirInode(int inode) {
     // Calcular el descriptor de grupo para el segundo directorio
     int groupDescriptor = inode / 2040; // 2040 = 0x7F8, tamaño de un grupo
+    // Calcular el residuo de la división
+    residuo = inode % 2040;
     // Se multiplica por 0x40 porque cada descriptor de grupo mide 0x40
     groupDescriptor *= 0x40;
     // Se suma 0x100800 porque es la posición donde comienzan los descriptores de grupo
@@ -361,6 +364,8 @@ int main()
       }
 
       currentLocation = getPosition(inode0.i_block[5]);
+      if(residuo - 1 >= 0)
+        currentLocation += ((residuo - 1) * 0x100);
 
       // Lee el bloque del directorio root
       if (readBlock(fd0, currentLocation, &root, sizeof(root)) != 0)
