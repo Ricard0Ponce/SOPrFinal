@@ -14,7 +14,22 @@
 int aux = 1;             // Bandera de control inicializada en 1
 int aux2 = 0;            // Segunda bandera de control inicializada en 0
 bool activado = false;   // Estado booleano inicializado en falso
-int residuo = 0;         // Variable para el residuo de la división
+int mover=3,moverC=3;
+bool restringido=false;
+int ind=0,ind2=0;
+int residuo =0;
+// Estructura para almacenar inodos y nombres
+struct inode_name {
+    uint32_t inode;
+    char name[255];
+};
+
+// Arreglo para almacenar inodos y nombres
+struct inode_name inode_names[255];
+struct inode_name inode_names2[255];
+int inode_count = 0;  // Contador de inodos
+int inode_count2=0;
+uint32_t sector_size = 512;
 
 // Definición de la estructura de entrada de partición MBR
 struct mbr_partition_entry {
@@ -79,7 +94,6 @@ int getPosition(int value) {
 int getDirInode(int inode) {
     // Calcular el descriptor de grupo para el segundo directorio
     int groupDescriptor = inode / 2040; // 2040 = 0x7F8, tamaño de un grupo
-    // Calcular el residuo de la división
     residuo = inode % 2040;
     // Se multiplica por 0x40 porque cada descriptor de grupo mide 0x40
     groupDescriptor *= 0x40;
@@ -123,7 +137,7 @@ void imprimeDirectorio()
   mvprintw(0, 0, "\n BLOQUE DEL DIRECTORIO ROOT \n");
 
   char *blockPtr = (char *)&root;  // Puntero al bloque del directorio raíz
-  int fila = 5;  // Comenzar en la fila 5 para los nombres de los archivos
+  int fila = 3;  // Comenzar en la fila 5 para los nombres de los archivos
 
   while (blockPtr < (char *)&root + sizeof(root))
   {
@@ -135,6 +149,11 @@ void imprimeDirectorio()
       char filename[255];  // Buffer para el nombre del archivo
       memcpy(filename, entry->name, entry->name_len);  // Copiar el nombre del archivo al buffer
       filename[entry->name_len] = '\0';  // Agregar el terminador nulo al final del nombre del archivo
+   // Almacenar el inodo y el nombre en el arreglo global
+      inode_names[inode_count].inode = entry->inode;
+      strncpy(inode_names[inode_count].name, filename, sizeof(inode_names[inode_count].name) - 1);
+      inode_names[inode_count].name[sizeof(inode_names[inode_count].name) - 1] = '\0';
+      inode_count++;
 
       mvprintw(fila, 0, "Nombre: %s -> %u\n", filename, entry->inode);  // Mostrar el nombre del archivo y el número de inodo
       fila += 2;  // Incrementar la fila en 2 para el próximo elemento
@@ -149,6 +168,69 @@ void imprimeDirectorio()
   }
   activado = false;  // Desactivar la bandera
 }
+
+void imprimeCarpeta(int inode,int fd0,FILE *file){
+
+char *blockPtr = (char *)&root;
+  while (blockPtr < (char *)&root + sizeof(root)) {
+    struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtr;
+
+    // Asigno inode
+    entry->inode = inode;
+    segundoDirectorioAux = *entry;
+    // Move to the next directory entry
+    blockPtr += entry->rec_len;
+  }
+  int calculoDescriptorDeGrupo = getDirInode(segundoDirectorioAux.inode);
+  int currentLocation = calculoDescriptorDeGrupo;
+
+    struct ext4_group_desc groupDescriptor1;
+     if (readBlock(fd0, currentLocation, &groupDescriptor1,
+                sizeof(groupDescriptor1)) != 0) {
+    fclose(file);
+  }
+
+  currentLocation = getPosition(groupDescriptor1.bg_inode_table_lo);
+  currentLocation += ((residuo - 1) * 0x100);
+
+    struct ext4_inode inode1;
+  if (readBlock(fd0, currentLocation, &inode1, sizeof(inode1)) != 0) {
+    fclose(file);
+  }
+  int dirBlock = getPosition(inode1.i_block[5]);
+  currentLocation = dirBlock;
+  
+  struct ext4_dir_entry_2 directorio;
+
+  // Leer el bloque del segundo directorio
+  if (readBlock(fd0, currentLocation, &directorio, sizeof(directorio)) != 0) {
+    fclose(file);
+  }
+  mvprintw(1,5,"BLOQUE DEL DIRECTORIO");
+
+  char *blockPtrD = (char *)&directorio;
+  int FilaC=3;
+  while (blockPtrD < (char *)&directorio + sizeof(directorio)) {
+    struct ext4_dir_entry_2 *entry = (struct ext4_dir_entry_2 *)blockPtrD;
+
+      char filename[255];  // Buffer para el nombre del archivo
+      memcpy(filename, entry->name, entry->name_len);  // Copiar el nombre del archivo al buffer
+      filename[entry->name_len] = '\0';  // Agregar el terminador nulo al final del nombre del archivo
+   // Almacenar el inodo y el nombre en el arreglo global
+      inode_names2[inode_count2].inode = entry->inode;
+      strncpy(inode_names2[inode_count2].name, filename, sizeof(inode_names2[inode_count2].name) - 1);
+      inode_names2[inode_count2].name[sizeof(inode_names2[inode_count2].name) - 1] = '\0';
+      inode_count2++;
+    mvprintw(FilaC,0,"Nombre: %s -> %u\n", entry->name, entry->inode);
+    FilaC++;
+
+    // Move to the next directory entry
+    blockPtrD += entry->rec_len;
+  }
+
+}
+
+
 
 // Función para imprimir la información CHS
 void print_chs(uint8_t chs[3], char *buffer)
@@ -202,7 +284,7 @@ int main()
   // Estructura para almacenar la entrada de la tabla de particiones MBR
   struct mbr_partition_entry entry;
   // Tamaño de sector típico para discos MBR
-  uint32_t sector_size = 512;
+
 
   // Lee la entrada de la primera partición (índice 0) de la tabla de particiones MBR
   fseek(file, 0x1BE, SEEK_SET);
@@ -348,6 +430,7 @@ int main()
 
     if (aux2 == 2)
     {
+      int largoLinea=20;
       // Borra la pantalla
       clear();
       // Obtiene la posición del primer inode
@@ -364,8 +447,6 @@ int main()
       }
 
       currentLocation = getPosition(inode0.i_block[5]);
-      if(residuo - 1 >= 0)
-        currentLocation += ((residuo - 1) * 0x100);
 
       // Lee el bloque del directorio root
       if (readBlock(fd0, currentLocation, &root, sizeof(root)) != 0)
@@ -376,6 +457,26 @@ int main()
       aux = aux + 1;
       // Invoca la función que imprime al directorio
       imprimeDirectorio();
+      move(mover, 0);
+     // Iluminar toda la línea en donde se encuentra el cursor de desplazamiento
+      attron(COLOR_PAIR(1) | A_REVERSE);  // Activar el par de colores 1 y el modo de inversión de color
+      mvhline(mover, 0, ' ', largoLinea);  // Dibujar una línea horizontal de espacios
+      mvprintw(mover, 0, "Nombre: %s -> %u", inode_names[ind].name, inode_names[ind].inode);
+      attroff(COLOR_PAIR(1) | A_REVERSE); 
+    }
+
+    if(aux2==3){
+      int largoLinea=20;
+      clear();
+      int inode = inode_names[ind].inode;
+      imprimeCarpeta(inode,fd0,file);
+      move(moverC, 0);
+      attron(COLOR_PAIR(1) | A_REVERSE);  // Activar el par de colores 1 y el modo de inversión de color
+      mvhline(moverC, 0, ' ', largoLinea);  // Dibujar una línea horizontal de espacios
+      mvprintw(moverC, 0, "Nombre: %s -> %u", inode_names2[ind2].name, inode_names2[ind2].inode);
+      attroff(COLOR_PAIR(1) | A_REVERSE); 
+      mvprintw(15, 0, "I: %d ", ind2);
+      mvprintw(16, 0, "Move: %d ", moverC);
     }
 
     if (bandera == 0)
@@ -393,13 +494,36 @@ int main()
     {
     case 0x1B5B41: // Flecha arriba
       i = (i > 0) ? i - 1 : 3;
+      if(aux2==2 && mover>3){
+        mover = mover-2;
+        ind--;
+      }
+      if(aux2==3 && moverC>3 && ind2>=0){
+        moverC --;
+        ind2--;
+      }
+      //activado=true;
       break;
     case 0x1B5B42: // Flecha abajo
       i = (i < 3) ? i + 1 : 0;
+      if(mover<10){
+      mover = mover+2;
+      if(aux2==2)
+      ind++;
+      }
+
+      if(aux2==3 && moverC<13){
+      moverC = moverC+1;
+        ind2++;
+        }
       break;
     case 10: // Enter key
       bandera = 1;
       activado = true;
+      if(aux2==2){
+      clear();
+      aux2=aux2+1;
+      }
     default:
       break;
     }
