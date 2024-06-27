@@ -70,7 +70,6 @@ La licencia de este proyecto pertenece a la Universidad Autónoma Metropolitana 
 Visite su portal oficial en el siguiente enlace: [https://www.izt.uam.mx/](https://www.izt.uam.mx/)
 
 ## Contacto
-## Contacto
 
 Si tienes alguna duda o sugerencia, puedes contactar a:
 
